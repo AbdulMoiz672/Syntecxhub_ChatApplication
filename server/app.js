@@ -6,6 +6,8 @@ import mongoose from 'mongoose';
 import { Room, Message } from './models.js';
 import { installDirectMessaging } from './direct.js';
 import { installAuth } from './auth.js';
+import { installFriends } from './friends.js';
+import { DirectUser } from './direct.js';
 
 export function createChatServer({ origin = 'http://localhost:5173' } = {}) {
   const app = express();
@@ -15,6 +17,7 @@ export function createChatServer({ origin = 'http://localhost:5173' } = {}) {
   const io = new Server(server, { cors: { origin }, maxHttpBufferSize: 16384 });
   installAuth(app, io, origin);
   installDirectMessaging(io);
+  installFriends(io, DirectUser);
   const wrap = fn => (req, res, next) => Promise.resolve(fn(req, res)).catch(next);
   app.get('/api/health', (req, res) => res.json({ ok: mongoose.connection.readyState === 1 }));
   app.get('/api/rooms', wrap(async (req, res) => res.json(await Room.find().sort({ createdAt: 1 }).lean())));

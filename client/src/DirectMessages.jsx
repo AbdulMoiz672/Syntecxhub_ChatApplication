@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { MessageSquare, X, Send, ArrowLeft } from 'lucide-react';
 import './direct.css';
+import Friends from './Friends.jsx';
 
 const merge = (a, b) => [...new Map([...a, ...b].map(m => [m._id, m])).values()].sort((a, b) => a._id.localeCompare(b._id));
 export default function DirectMessages({ socket, identity, Dialog }) {
@@ -67,6 +68,7 @@ export default function DirectMessages({ socket, identity, Dialog }) {
   }
   const total = Object.values(unread).reduce((a, b) => a + b, 0), peer = users.find(u => u._id === selected);
   return <>
+    <Friends socket={socket} identity={identity} users={users} Dialog={Dialog} onMessage={userId => { setSelected(userId); setText(''); setOpen(true); }}/>
     <button className="create-room direct-launch" onClick={() => setOpen(true)} disabled={!identity}><MessageSquare size={17}/> Direct messages {total > 0 && <b className="dm-badge">{total}</b>}</button>
     {open && createPortal(<div className="modal-backdrop"><Dialog labelledBy="direct-title" onDismiss={() => setOpen(false)}><div className="dm-shell">
       <header className="dm-top"><div><h2 id="direct-title">Direct messages</h2><p>One-to-one conversations</p></div><button className="icon-button" aria-label="Close direct messages" onClick={() => setOpen(false)}><X/></button></header>

@@ -36,6 +36,12 @@ Choose **Direct messages** in the sidebar, then select another user. Registered 
 
 Log in to the same account on another browser or device to access the same direct-message history. Unread counts reflect messages received during the current session; saved history also includes messages received while offline.
 
+## Friends
+
+Open **Friends** in the sidebar, then use **Add friends** to search registered users by display name and send a request. Incoming and outgoing requests appear in **Requests**. Recipients can accept or decline; senders can cancel. Accepted friends appear in **Friends**, with **Message** and **Remove** actions.
+
+Friendships and requests are saved in MongoDB and restored after login, including on other devices. Changes update both participants in real time. Removing a friend keeps existing message history. Direct messaging remains available to other registered users as before.
+
 ## Accounts
 
 - Switch between **Log in** and **Register** on the opening screen. Registration requires a display name, email, password (8?128 characters), and password confirmation.

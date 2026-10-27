@@ -8,12 +8,13 @@ import { createChatServer } from './app.js';
 import { Room } from './models.js';
 import { DirectUser, DirectMessage } from './direct.js';
 import { Session } from './auth.js';
+import { Friendship } from './friends.js';
 
 test('accounts protect rooms and direct histories, persist across login, and revoke on logout', { timeout: 60000 }, async () => {
  const mongo=await MongoMemoryServer.create();let service;const clients=[];
  try {
   await mongoose.connect(mongo.getUri());
-  await Promise.all([Room.init(),DirectUser.init(),Session.init()]);
+  await Promise.all([Room.init(),DirectUser.init(),Session.init(),Friendship.init()]);
   service=createChatServer();await new Promise(r=>service.server.listen(0,'127.0.0.1',r));
   const base='http://127.0.0.1:'+service.server.address().port;
   async function request(path,body,cookie){const r=await fetch(base+'/api'+path,{method:body?'POST':'GET',headers:{'Content-Type':'application/json',...(cookie?{Cookie:cookie}:{})},...(body?{body:JSON.stringify(body)}:{})});return {status:r.status,data:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
@@ -71,6 +72,35 @@ test('accounts protect rooms and direct histories, persist across login, and rev
   const ls=await client(claimed.cookie);await emit(ls,'direct:identify');
   assert.equal((await emit(ls,'direct:history',{userId:bob.data.user._id})).messages[0].text,'Old history');
   const blocked=await fetch(base+'/api/auth/logout',{method:'POST',headers:{Origin:'https://other.example',Cookie:bob.cookie}});assert.equal(blocked.status,403);
+  // Friend requests are private to participants, durable, and recipient-approved.
+  assert.equal((await emit(returning,'friends:request',{userId:alice.data.user._id.toUpperCase()})).ok,false);
+  assert.equal((await emit(returning,'friends:request',{userId:'invalid'})).ok,false);
+  const requestNotice=new Promise(resolve=>b.once('friends:changed',resolve));
+  assert.equal((await emit(returning,'friends:request',{userId:bob.data.user._id})).ok,true);
+  await requestNotice;
+  assert.equal((await emit(returning,'friends:request',{userId:bob.data.user._id})).ok,false);
+  assert.equal((await emit(b,'friends:request',{userId:alice.data.user._id})).ok,false);
+  let relations=(await emit(b,'friends:list')).relationships;
+  assert.equal(relations.length,1);assert.equal(relations[0].direction,'incoming');
+  assert.equal(relations[0].username,'Alice');assert.equal(relations[0].status,'pending');
+  const relationshipId=relations[0]._id;
+  assert.deepEqual((await emit(e,'friends:list')).relationships,[]);
+  assert.equal((await emit(e,'friends:accept',{relationshipId})).ok,false);
+  assert.equal((await emit(returning,'friends:accept',{relationshipId})).ok,false);
+  assert.equal((await emit(e,'friends:remove',{relationshipId})).ok,false);
+  assert.equal((await emit(b,'friends:accept',{relationshipId})).ok,true);
+  assert.equal((await emit(returning,'friends:list')).relationships[0].status,'accepted');
+  const secondDevice=await client(login.cookie);
+  assert.equal((await emit(secondDevice,'friends:list')).relationships[0].userId,bob.data.user._id);
+  assert.equal((await emit(b,'friends:remove',{relationshipId})).ok,true);
+  assert.deepEqual((await emit(returning,'friends:list')).relationships,[]);
+  assert.equal((await emit(returning,'friends:request',{userId:eve.data.user._id})).ok,true);
+  const declined=(await emit(e,'friends:list')).relationships[0]._id;
+  assert.equal((await emit(e,'friends:remove',{relationshipId:declined})).ok,true);
+  assert.equal((await emit(returning,'friends:request',{userId:eve.data.user._id})).ok,true);
+  const cancelled=(await emit(returning,'friends:list')).relationships[0]._id;
+  assert.equal((await emit(returning,'friends:remove',{relationshipId:cancelled})).ok,true);
+  assert.deepEqual((await emit(e,'friends:list')).relationships,[]);
   await Session.updateOne({user:bob.data.user._id},{expiresAt:new Date(0)});
   assert.equal((await request('/rooms',null,bob.cookie)).status,401);
  } finally {clients.forEach(s=>s.disconnect());if(service)await new Promise(r=>service.io.close(r));await mongoose.disconnect();await mongo.stop();}
